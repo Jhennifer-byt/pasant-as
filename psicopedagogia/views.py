@@ -1,66 +1,67 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
-from rest_framework.decorators import action
+from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
+from .pagination import CustomPageNumberPagination
 
 from .models import (
-    CicloAcademico, Evento, MiembroPsicopedagogia, InstanciaEventoCiclo, ImagenGeneralNosotros,
-    FotoEvento, ArchivoInscritos, CategoriaDeporte, EquipoCopaTecsup
-)
-from .serializers import (
-    CicloAcademicoSerializer, EventoSerializer, InstanciaEventoCicloSerializer, MiembroPsicopedagogiaSerializer,
-    ImagenGeneralNosotrosSerializer, FotoEventoSerializer, ArchivoInscritosSerializer,
-    CategoriaDeporteSerializer, EquipoCopaTecsupSerializer
+    CicloAcademico, Evento,Actividad, MiembroPsicopedagogia, ImagenGeneralNosotros,
+    Foto, Galeria, CicloActividad
 )
 
+from .serializers import (
+    CicloAcademicoSerializer, CicloActividadSerializer, EventoSerializer, MiembroPsicopedagogiaSerializer,
+    ImagenGeneralNosotrosSerializer, FotoSerializer,
+    CargaMasivaFotoEventoSerializer, ActividadSerializer, GaleriaSerializer
+)
 
 class CicloAcademicoViewSet(viewsets.ModelViewSet):
-    queryset = CicloAcademico.objects.all()
+    queryset         = CicloAcademico.objects.all()
     serializer_class = CicloAcademicoSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    filter_backends  = [filters.OrderingFilter, filters.SearchFilter]
+    search_fields    = ['semestre']
 
-    @action(detail=False, methods=['get'])
-    def archivados(self, request):
-        archivados = self.queryset.filter(estado='archivado')
-        serializer = self.get_serializer(archivados, many=True)
-        return Response(serializer.data)
+class ActividadViewSet(viewsets.ModelViewSet):
+    queryset         = Actividad.objects.all()
+    serializer_class = ActividadSerializer
+    filter_backends  = [filters.SearchFilter]
+    search_fields    = ['nombre']
 
+class CicloActividadViewSet(viewsets.ModelViewSet):
+    queryset         = CicloActividad.objects.select_related('ciclo_academico', 'actividad')
+    serializer_class = CicloActividadSerializer
+    filter_backends  = [DjangoFilterBackend]
+    filterset_fields = ['ciclo_academico', 'actividad']
+
+class GaleriaViewSet(viewsets.ModelViewSet):
+    queryset         = Galeria.objects.all()
+    serializer_class = GaleriaSerializer
+    filter_backends  = [DjangoFilterBackend]
+    filterset_fields = ['ciclo_actividad']
+
+class FotoViewSet(viewsets.ModelViewSet):
+    queryset         = Foto.objects.all().order_by('id') # Define un queryset base ordenado
+    serializer_class = FotoSerializer
+    filter_backends  = [DjangoFilterBackend]
+    filterset_fields = ['galeria__ciclo_actividad'] # <-- Cambiado aquí
+    pagination_class = CustomPageNumberPagination  # Esto ya lo tenías y es correcto
+    
+    def get_queryset(self):
+        # Puedes mantener o ajustar tu lógica de filtrado aquí
+        queryset = super().get_queryset()
+        galeria_ciclo_actividad = self.request.query_params.get('galeria__ciclo_actividad', None)
+        if galeria_ciclo_actividad:
+            queryset = queryset.filter(galeria__ciclo_actividad=galeria_ciclo_actividad)
+        return queryset
 
 class EventoViewSet(viewsets.ModelViewSet):
-    queryset = Evento.objects.all()
+    queryset         = Evento.objects.all()
     serializer_class = EventoSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_queryset(self):
-        ciclo_id = self.request.query_params.get('ciclo')
-        if ciclo_id:
-            return Evento.objects.filter(ciclo_academico_id=ciclo_id)
-        return super().get_queryset()
-
-    @action(detail=False, methods=['get'])
-    def destacados(self, request):
-        # 🔥 Aquí NO usamos get_queryset para evitar el filtro por ciclo
-        eventos_destacados = Evento.objects.filter(es_destacado=True)
-        serializer = self.get_serializer(eventos_destacados, many=True)
-        return Response(serializer.data)
-    
-class InstanciaEventoCicloViewSet(viewsets.ModelViewSet):
-    queryset = InstanciaEventoCiclo.objects.all()
-    serializer_class = InstanciaEventoCicloSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_queryset(self):
-        evento_id = self.request.query_params.get('evento')
-        ciclo_id = self.request.query_params.get('ciclo')
-        qs = self.queryset
-
-        if evento_id:
-            qs = qs.filter(evento_id=evento_id)
-        if ciclo_id:
-            qs = qs.filter(ciclo_academico_id=ciclo_id)
-
-        return qs
-
+    filter_backends  = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['ciclo_academico']
 
 class MiembroPsicopedagogiaViewSet(viewsets.ModelViewSet):
     queryset = MiembroPsicopedagogia.objects.all()
@@ -73,42 +74,14 @@ class ImagenGeneralNosotrosViewSet(viewsets.ModelViewSet):
     serializer_class = ImagenGeneralNosotrosSerializer
     permission_classes = [AllowAny]
 
-class FotoEventoViewSet(viewsets.ModelViewSet):
-    queryset = FotoEvento.objects.all()
-    serializer_class = FotoEventoSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
 
-    def get_queryset(self):
-        instancia_id = self.request.query_params.get('instancia')
-        if instancia_id:
-            return FotoEvento.objects.filter(instancia_id=instancia_id)
-        return super().get_queryset()
+class CargaMasivaFotoEventoView(APIView):
+    # Para procesar archivos
+    parser_classes = [MultiPartParser, FormParser]
 
-
-class ArchivoInscritosViewSet(viewsets.ModelViewSet):
-    queryset = ArchivoInscritos.objects.all()
-    serializer_class = ArchivoInscritosSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_queryset(self):
-        instancia_id = self.request.query_params.get('instancia')
-        if instancia_id:
-            return ArchivoInscritos.objects.filter(instancia_id=instancia_id)
-        return super().get_queryset()
-
-
-class CategoriaDeporteViewSet(viewsets.ModelViewSet):
-    queryset = CategoriaDeporte.objects.all()
-    serializer_class = CategoriaDeporteSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-class EquipoCopaTecsupViewSet(viewsets.ModelViewSet):
-    queryset = EquipoCopaTecsup.objects.all()
-    serializer_class = EquipoCopaTecsupSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-
-    def get_queryset(self):
-        instancia_id = self.request.query_params.get('instancia')
-        if instancia_id:
-            return EquipoCopaTecsup.objects.filter(instancia_id=instancia_id)
-        return super().get_queryset()
+    def post(self, request, *args, **kwargs):
+        serializer = CargaMasivaFotoEventoSerializer(data=request.data)
+        if serializer.is_valid():
+            fotos = serializer.save()
+            return Response({'message': 'Fotos subidas con éxito'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

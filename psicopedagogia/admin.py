@@ -1,20 +1,45 @@
 from django.contrib import admin
 from .models import (
-    InstanciaEventoCiclo, CicloAcademico, Evento, MiembroPsicopedagogia, ImagenGeneralNosotros,
-    FotoEvento, ArchivoInscritos, CategoriaDeporte, EquipoCopaTecsup
+    CicloAcademico, Actividad, CicloActividad,
+    Galeria, Foto, Evento,
+    
 )
 
-admin.site.register(CicloAcademico)
+@admin.register(CicloAcademico)
+class CicloAcademicoAdmin(admin.ModelAdmin):
+    list_display  = ('id', 'semestre', 'fecha_inicio', 'fecha_fin', 'archivado')
+    list_filter   = ('semestre', 'archivado')
+    search_fields = ('semestre',)
+
+@admin.register(Actividad)
+class ActividadAdmin(admin.ModelAdmin):
+    list_display  = ('id', 'nombre', 'enlace_inscripcion')
+    search_fields = ('nombre',)
+
+@admin.register(CicloActividad)
+class CicloActividadAdmin(admin.ModelAdmin):
+    list_display = ('id', 'ciclo_academico', 'actividad')
+    list_filter  = ('ciclo_academico',)
+
+@admin.register(Galeria)
+class GaleriaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'ciclo_actividad')
+    list_filter  = ('ciclo_actividad',)
+
+@admin.register(Foto)
+class FotoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'galeria', 'imagen', 'imagen_url')
+    list_filter  = ('galeria',)
+
+    def imagen_url(self, obj):
+        if obj.imagen:
+            return obj.imagen.url
+        return '-'
+    imagen_url.short_description = 'URL de la imagen'
 
 @admin.register(Evento)
 class EventoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'es_destacado', 'link_formulario')
+    list_display  = ('id', 'nombre', 'ciclo_academico', 'enlace_inscripcion')
+    list_filter   = ('ciclo_academico',)
+    search_fields = ('nombre',)
 
-admin.site.register(MiembroPsicopedagogia)
-admin.site.register(ImagenGeneralNosotros)
-admin.site.register(FotoEvento)
-admin.site.register(ArchivoInscritos)
-admin.site.register(CategoriaDeporte)
-admin.site.register(EquipoCopaTecsup)
-
-admin.site.register(InstanciaEventoCiclo)
